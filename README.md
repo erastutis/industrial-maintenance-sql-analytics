@@ -2,9 +2,7 @@
 
 ## Project Overview
 
-This project analyses industrial machine operating data to identify failure patterns, high-risk operating conditions and potential maintenance priorities.
-
-The goal is to use SQL and Python to turn raw machine sensor data into practical engineering insights. The project focuses on failure rate analysis, operating condition segmentation and rule-based risk scoring.
+This project analyses industrial machine operating data to identify failure and high-risk operating conditions
 
 ## Dataset
 
@@ -49,8 +47,6 @@ Overall failure rate:
 
 3.39%
 
-This means that failures are relatively rare. Because of this, accuracy alone would be a misleading metric for any future machine learning model. Precision, recall and F1-score would be more useful.
-
 ### 2. Product type L has the highest failure rate
 
 Failure rate by product type:
@@ -86,7 +82,6 @@ Failure type distribution:
 | Tool Wear Failure | 46 |
 | Random Failure | 19 |
 
-Heat dissipation failure was the most frequent failure type.
 
 ### 5. Tool wear above 200 minutes strongly increases failure risk
 
@@ -138,8 +133,6 @@ The rule-based segmentation separates high-risk and low-risk operating condition
 
 The analysis suggests that torque and tool wear are the strongest practical indicators of failure risk in this dataset.
 
-From an engineering maintenance perspective, machines operating with both high tool wear and high torque should be prioritized for inspection. A simple SQL-based risk segmentation already identifies a small group of high-risk records with a much higher failure rate than the dataset average.
-
 ## Repository Structure
 
 industrial-maintenance-sql-analytics/
@@ -158,30 +151,3 @@ industrial-maintenance-sql-analytics/
     ├── load_data.py
     └── run_sql.py
 
-## How to Run
-
-1. Place the raw dataset in:
-
-data/raw/ai4i2020.csv
-
-2. Load the CSV into SQLite:
-
-python src/load_data.py
-
-3. Run the SQL analysis:
-
-python src/run_sql.py
-
-4. View the output in:
-
-reports/sql_results.txt
-
-## Next Steps
-
-Possible next steps:
-
-1. Build a machine learning model to predict machine failure.
-2. Compare logistic regression, random forest and gradient boosting.
-3. Evaluate the model using recall, precision and F1-score.
-4. Create a simple dashboard showing failure risk by product type and operating condition.
-5. Add explainability using feature importance.
