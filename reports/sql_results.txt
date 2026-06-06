@@ -1,0 +1,520 @@
+====================================================================================================
+FILE: 02_basic_analysis.sql
+====================================================================================================
+
+--------------------------------------------------------------------------------
+QUERY 1
+--------------------------------------------------------------------------------
+-- 1. Preview dataset
+SELECT *
+FROM machine_readings
+LIMIT 10;
+
+RESULT:
+COLUMNS: ['udi', 'product_id', 'type', 'air_temperature_k', 'process_temperature_k', 'rotational_speed_rpm', 'torque_nm', 'tool_wear_min', 'machine_failure', 'twf', 'hdf', 'pwf', 'osf', 'rnf']
+(1, 'M14860', 'M', 298.1, 308.6, 1551, 42.8, 0, 0, 0, 0, 0, 0, 0)
+(2, 'L47181', 'L', 298.2, 308.7, 1408, 46.3, 3, 0, 0, 0, 0, 0, 0)
+(3, 'L47182', 'L', 298.1, 308.5, 1498, 49.4, 5, 0, 0, 0, 0, 0, 0)
+(4, 'L47183', 'L', 298.2, 308.6, 1433, 39.5, 7, 0, 0, 0, 0, 0, 0)
+(5, 'L47184', 'L', 298.2, 308.7, 1408, 40.0, 9, 0, 0, 0, 0, 0, 0)
+(6, 'M14865', 'M', 298.1, 308.6, 1425, 41.9, 11, 0, 0, 0, 0, 0, 0)
+(7, 'L47186', 'L', 298.1, 308.6, 1558, 42.4, 14, 0, 0, 0, 0, 0, 0)
+(8, 'L47187', 'L', 298.1, 308.6, 1527, 40.2, 16, 0, 0, 0, 0, 0, 0)
+(9, 'M14868', 'M', 298.3, 308.7, 1667, 28.6, 18, 0, 0, 0, 0, 0, 0)
+(10, 'M14869', 'M', 298.5, 309.0, 1741, 28.0, 21, 0, 0, 0, 0, 0, 0)
+
+--------------------------------------------------------------------------------
+QUERY 2
+--------------------------------------------------------------------------------
+-- 2. Dataset size
+SELECT
+    COUNT(*) AS total_records
+FROM machine_readings;
+
+RESULT:
+COLUMNS: ['total_records']
+(10000,)
+
+--------------------------------------------------------------------------------
+QUERY 3
+--------------------------------------------------------------------------------
+-- 3. Overall machine failure rate
+SELECT
+    COUNT(*) AS total_records,
+    SUM(machine_failure) AS total_failures,
+    ROUND(100.0 * SUM(machine_failure) / COUNT(*), 2) AS failure_rate_pct
+FROM machine_readings;
+
+RESULT:
+COLUMNS: ['total_records', 'total_failures', 'failure_rate_pct']
+(10000, 339, 3.39)
+
+--------------------------------------------------------------------------------
+QUERY 4
+--------------------------------------------------------------------------------
+-- 4. Product type distribution
+SELECT
+    type,
+    COUNT(*) AS total_records,
+    ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM machine_readings), 2) AS share_pct
+FROM machine_readings
+GROUP BY type
+ORDER BY total_records DESC;
+
+RESULT:
+COLUMNS: ['type', 'total_records', 'share_pct']
+('L', 6000, 60.0)
+('M', 2997, 29.97)
+('H', 1003, 10.03)
+
+--------------------------------------------------------------------------------
+QUERY 5
+--------------------------------------------------------------------------------
+-- 5. Failure rate by product type
+SELECT
+    type,
+    COUNT(*) AS total_records,
+    SUM(machine_failure) AS total_failures,
+    ROUND(100.0 * SUM(machine_failure) / COUNT(*), 2) AS failure_rate_pct
+FROM machine_readings
+GROUP BY type
+ORDER BY failure_rate_pct DESC;
+
+RESULT:
+COLUMNS: ['type', 'total_records', 'total_failures', 'failure_rate_pct']
+('L', 6000, 235, 3.92)
+('M', 2997, 83, 2.77)
+('H', 1003, 21, 2.09)
+
+--------------------------------------------------------------------------------
+QUERY 6
+--------------------------------------------------------------------------------
+-- 6. Average operating conditions: failed vs non-failed
+SELECT
+    machine_failure,
+    ROUND(AVG(air_temperature_k), 2) AS avg_air_temperature_k,
+    ROUND(AVG(process_temperature_k), 2) AS avg_process_temperature_k,
+    ROUND(AVG(rotational_speed_rpm), 2) AS avg_rotational_speed_rpm,
+    ROUND(AVG(torque_nm), 2) AS avg_torque_nm,
+    ROUND(AVG(tool_wear_min), 2) AS avg_tool_wear_min
+FROM machine_readings
+GROUP BY machine_failure;
+
+RESULT:
+COLUMNS: ['machine_failure', 'avg_air_temperature_k', 'avg_process_temperature_k', 'avg_rotational_speed_rpm', 'avg_torque_nm', 'avg_tool_wear_min']
+(0, 299.97, 310.0, 1540.26, 39.63, 106.69)
+(1, 300.89, 310.29, 1496.49, 50.17, 143.78)
+
+--------------------------------------------------------------------------------
+QUERY 7
+--------------------------------------------------------------------------------
+-- 7. Min / max sensor ranges
+SELECT
+    MIN(air_temperature_k) AS min_air_temp,
+    MAX(air_temperature_k) AS max_air_temp,
+    MIN(process_temperature_k) AS min_process_temp,
+    MAX(process_temperature_k) AS max_process_temp,
+    MIN(rotational_speed_rpm) AS min_rpm,
+    MAX(rotational_speed_rpm) AS max_rpm,
+    MIN(torque_nm) AS min_torque,
+    MAX(torque_nm) AS max_torque,
+    MIN(tool_wear_min) AS min_tool_wear,
+    MAX(tool_wear_min) AS max_tool_wear
+FROM machine_readings;
+
+RESULT:
+COLUMNS: ['min_air_temp', 'max_air_temp', 'min_process_temp', 'max_process_temp', 'min_rpm', 'max_rpm', 'min_torque', 'max_torque', 'min_tool_wear', 'max_tool_wear']
+(295.3, 304.5, 305.7, 313.8, 1168, 2886, 3.8, 76.6, 0, 253)
+====================================================================================================
+FILE: 03_failure_analysis.sql
+====================================================================================================
+
+--------------------------------------------------------------------------------
+QUERY 1
+--------------------------------------------------------------------------------
+-- 1. Failure type distribution
+SELECT 'Tool Wear Failure' AS failure_type, SUM(twf) AS failure_count FROM machine_readings
+UNION ALL
+SELECT 'Heat Dissipation Failure', SUM(hdf) FROM machine_readings
+UNION ALL
+SELECT 'Power Failure', SUM(pwf) FROM machine_readings
+UNION ALL
+SELECT 'Overstrain Failure', SUM(osf) FROM machine_readings
+UNION ALL
+SELECT 'Random Failure', SUM(rnf) FROM machine_readings
+ORDER BY failure_count DESC;
+
+RESULT:
+COLUMNS: ['failure_type', 'failure_count']
+('Heat Dissipation Failure', 115)
+('Overstrain Failure', 98)
+('Power Failure', 95)
+('Tool Wear Failure', 46)
+('Random Failure', 19)
+
+--------------------------------------------------------------------------------
+QUERY 2
+--------------------------------------------------------------------------------
+-- 2. Average conditions by failure type
+SELECT
+    'Tool Wear Failure' AS failure_type,
+    ROUND(AVG(tool_wear_min), 2) AS avg_tool_wear,
+    ROUND(AVG(torque_nm), 2) AS avg_torque,
+    ROUND(AVG(rotational_speed_rpm), 2) AS avg_rpm,
+    COUNT(*) AS records
+FROM machine_readings
+WHERE twf = 1
+
+UNION ALL
+
+SELECT
+    'Heat Dissipation Failure',
+    ROUND(AVG(tool_wear_min), 2),
+    ROUND(AVG(torque_nm), 2),
+    ROUND(AVG(rotational_speed_rpm), 2),
+    COUNT(*)
+FROM machine_readings
+WHERE hdf = 1
+
+UNION ALL
+
+SELECT
+    'Power Failure',
+    ROUND(AVG(tool_wear_min), 2),
+    ROUND(AVG(torque_nm), 2),
+    ROUND(AVG(rotational_speed_rpm), 2),
+    COUNT(*)
+FROM machine_readings
+WHERE pwf = 1
+
+UNION ALL
+
+SELECT
+    'Overstrain Failure',
+    ROUND(AVG(tool_wear_min), 2),
+    ROUND(AVG(torque_nm), 2),
+    ROUND(AVG(rotational_speed_rpm), 2),
+    COUNT(*)
+FROM machine_readings
+WHERE osf = 1
+
+UNION ALL
+
+SELECT
+    'Random Failure',
+    ROUND(AVG(tool_wear_min), 2),
+    ROUND(AVG(torque_nm), 2),
+    ROUND(AVG(rotational_speed_rpm), 2),
+    COUNT(*)
+FROM machine_readings
+WHERE rnf = 1;
+
+RESULT:
+COLUMNS: ['failure_type', 'avg_tool_wear', 'avg_torque', 'avg_rpm', 'records']
+('Tool Wear Failure', 216.37, 37.84, 1566.17, 46)
+('Heat Dissipation Failure', 107.19, 53.17, 1337.26, 115)
+('Power Failure', 101.88, 48.51, 1763.97, 95)
+('Overstrain Failure', 207.69, 58.37, 1350.33, 98)
+('Random Failure', 124.47, 43.67, 1485.0, 19)
+
+--------------------------------------------------------------------------------
+QUERY 3
+--------------------------------------------------------------------------------
+-- 3. Failed records with multiple failure labels
+SELECT
+    udi,
+    product_id,
+    type,
+    machine_failure,
+    twf,
+    hdf,
+    pwf,
+    osf,
+    rnf,
+    (twf + hdf + pwf + osf + rnf) AS failure_type_count
+FROM machine_readings
+WHERE machine_failure = 1
+ORDER BY failure_type_count DESC, udi;
+
+RESULT:
+COLUMNS: ['udi', 'product_id', 'type', 'machine_failure', 'twf', 'hdf', 'pwf', 'osf', 'rnf', 'failure_type_count']
+(5910, 'H35323', 'H', 1, 1, 0, 1, 1, 0, 3)
+(70, 'L47249', 'L', 1, 0, 0, 1, 1, 0, 2)
+(1325, 'M16184', 'M', 1, 0, 0, 1, 1, 0, 2)
+(1497, 'L48676', 'L', 1, 0, 0, 1, 1, 0, 2)
+(3612, 'L50791', 'L', 1, 1, 0, 0, 0, 1, 2)
+(3855, 'L51034', 'L', 1, 0, 0, 1, 1, 0, 2)
+(3944, 'L51123', 'L', 1, 0, 0, 1, 1, 0, 2)
+(4255, 'L51434', 'L', 1, 0, 1, 1, 0, 0, 2)
+(4343, 'M19202', 'M', 1, 0, 1, 1, 0, 0, 2)
+(4371, 'L51550', 'L', 1, 0, 1, 0, 1, 0, 2)
+(4384, 'L51563', 'L', 1, 0, 1, 0, 1, 0, 2)
+(4418, 'L51597', 'L', 1, 0, 1, 1, 0, 0, 2)
+(4463, 'L51642', 'L', 1, 0, 1, 0, 1, 0, 2)
+(4643, 'L51822', 'L', 1, 0, 1, 0, 1, 0, 2)
+(4644, 'L51823', 'L', 1, 0, 1, 0, 1, 0, 2)
+(4730, 'L51909', 'L', 1, 0, 1, 0, 1, 0, 2)
+(5395, 'M20254', 'M', 1, 0, 0, 1, 1, 0, 2)
+(5402, 'M20261', 'M', 1, 1, 0, 0, 1, 0, 2)
+(6249, 'L53428', 'L', 1, 0, 0, 1, 1, 0, 2)
+(7084, 'L54263', 'L', 1, 0, 0, 1, 1, 0, 2)
+(8847, 'M23706', 'M', 1, 1, 0, 0, 1, 0, 2)
+(8927, 'M23786', 'M', 1, 0, 0, 1, 1, 0, 2)
+(9085, 'L56264', 'L', 1, 0, 0, 1, 1, 0, 2)
+(9975, 'L57154', 'L', 1, 0, 0, 1, 1, 0, 2)
+(51, 'L47230', 'L', 1, 0, 0, 1, 0, 0, 1)
+(78, 'L47257', 'L', 1, 1, 0, 0, 0, 0, 1)
+(161, 'L47340', 'L', 1, 0, 0, 0, 1, 0, 1)
+(162, 'L47341', 'L', 1, 0, 0, 0, 1, 0, 1)
+(169, 'L47348', 'L', 1, 0, 0, 1, 0, 0, 1)
+(195, 'M15054', 'M', 1, 0, 0, 1, 0, 0, 1)
+... 309 more rows
+
+--------------------------------------------------------------------------------
+QUERY 4
+--------------------------------------------------------------------------------
+-- 4. Failure rate by tool wear segment
+SELECT
+    CASE
+        WHEN tool_wear_min < 50 THEN '0-49'
+        WHEN tool_wear_min < 100 THEN '50-99'
+        WHEN tool_wear_min < 150 THEN '100-149'
+        WHEN tool_wear_min < 200 THEN '150-199'
+        ELSE '200+'
+    END AS tool_wear_segment,
+    COUNT(*) AS total_records,
+    SUM(machine_failure) AS total_failures,
+    ROUND(100.0 * SUM(machine_failure) / COUNT(*), 2) AS failure_rate_pct
+FROM machine_readings
+GROUP BY tool_wear_segment
+ORDER BY MIN(tool_wear_min);
+
+RESULT:
+COLUMNS: ['tool_wear_segment', 'total_records', 'total_failures', 'failure_rate_pct']
+('0-49', 2349, 52, 2.21)
+('50-99', 2271, 51, 2.25)
+('100-149', 2290, 52, 2.27)
+('150-199', 2289, 61, 2.66)
+('200+', 801, 123, 15.36)
+
+--------------------------------------------------------------------------------
+QUERY 5
+--------------------------------------------------------------------------------
+-- 5. Failure rate by torque segment
+SELECT
+    CASE
+        WHEN torque_nm < 30 THEN '<30'
+        WHEN torque_nm < 40 THEN '30-39'
+        WHEN torque_nm < 50 THEN '40-49'
+        WHEN torque_nm < 60 THEN '50-59'
+        ELSE '60+'
+    END AS torque_segment,
+    COUNT(*) AS total_records,
+    SUM(machine_failure) AS total_failures,
+    ROUND(100.0 * SUM(machine_failure) / COUNT(*), 2) AS failure_rate_pct
+FROM machine_readings
+GROUP BY torque_segment
+ORDER BY MIN(torque_nm);
+
+RESULT:
+COLUMNS: ['torque_segment', 'total_records', 'total_failures', 'failure_rate_pct']
+('<30', 1576, 43, 2.73)
+('30-39', 3364, 19, 0.56)
+('40-49', 3487, 66, 1.89)
+('50-59', 1334, 111, 8.32)
+('60+', 239, 100, 41.84)
+====================================================================================================
+FILE: 04_risk_segments.sql
+====================================================================================================
+
+--------------------------------------------------------------------------------
+QUERY 1
+--------------------------------------------------------------------------------
+-- 1. Rule-based risk segmentation
+SELECT
+    udi,
+    product_id,
+    type,
+    torque_nm,
+    rotational_speed_rpm,
+    tool_wear_min,
+    machine_failure,
+    CASE
+        WHEN tool_wear_min >= 200 AND torque_nm >= 50 THEN 'High risk'
+        WHEN tool_wear_min >= 150 OR torque_nm >= 45 THEN 'Medium risk'
+        ELSE 'Low risk'
+    END AS risk_segment
+FROM machine_readings
+ORDER BY
+    CASE
+        WHEN tool_wear_min >= 200 AND torque_nm >= 50 THEN 1
+        WHEN tool_wear_min >= 150 OR torque_nm >= 45 THEN 2
+        ELSE 3
+    END,
+    tool_wear_min DESC,
+    torque_nm DESC;
+
+RESULT:
+COLUMNS: ['udi', 'product_id', 'type', 'torque_nm', 'rotational_speed_rpm', 'tool_wear_min', 'machine_failure', 'risk_segment']
+(5402, 'M20261', 'M', 54.8, 1454, 253, 1, 'High risk')
+(5400, 'H34813', 'H', 53.8, 1411, 246, 1, 'High risk')
+(5395, 'M20254', 'M', 70.5, 1262, 234, 1, 'High risk')
+(9665, 'L56844', 'L', 54.8, 1317, 231, 1, 'High risk')
+(2859, 'L50038', 'L', 51.5, 1417, 231, 1, 'High risk')
+(4033, 'L51212', 'L', 50.3, 1383, 231, 1, 'High risk')
+(4384, 'L51563', 'L', 65.5, 1298, 229, 1, 'High risk')
+(4644, 'L51823', 'L', 54.2, 1324, 228, 1, 'High risk')
+(1336, 'L48515', 'L', 53.8, 1371, 228, 1, 'High risk')
+(4643, 'L51822', 'L', 54.6, 1238, 226, 1, 'High risk')
+(9497, 'M24356', 'M', 50.4, 1349, 226, 0, 'High risk')
+(8027, 'L55206', 'L', 50.2, 1399, 222, 1, 'High risk')
+(8609, 'L55788', 'L', 50.6, 1369, 220, 1, 'High risk')
+(2333, 'L49512', 'L', 50.4, 1378, 220, 1, 'High risk')
+(8026, 'M22885', 'M', 50.7, 1422, 219, 0, 'High risk')
+(3026, 'L50205', 'L', 50.2, 1366, 219, 0, 'High risk')
+(250, 'L47429', 'L', 56.2, 1405, 218, 1, 'High risk')
+(2332, 'L49511', 'L', 53.6, 1384, 218, 1, 'High risk')
+(1596, 'L48775', 'L', 52.9, 1365, 218, 1, 'High risk')
+(162, 'L47341', 'L', 52.3, 1412, 218, 1, 'High risk')
+(332, 'M15191', 'M', 51.9, 1391, 218, 0, 'High risk')
+(8608, 'L55787', 'L', 50.0, 1433, 218, 0, 'High risk')
+(9494, 'L56673', 'L', 55.4, 1398, 217, 1, 'High risk')
+(9660, 'L56839', 'L', 61.9, 1287, 216, 1, 'High risk')
+(161, 'L47340', 'L', 60.7, 1282, 216, 1, 'High risk')
+(249, 'L47428', 'L', 56.8, 1362, 216, 1, 'High risk')
+(6674, 'L53853', 'L', 51.8, 1380, 216, 1, 'High risk')
+(5388, 'L52567', 'L', 50.0, 1433, 216, 0, 'High risk')
+(4730, 'L51909', 'L', 61.0, 1306, 215, 1, 'High risk')
+(927, 'L48106', 'L', 55.6, 1372, 215, 1, 'High risk')
+... 9970 more rows
+
+--------------------------------------------------------------------------------
+QUERY 2
+--------------------------------------------------------------------------------
+-- 2. Failure rate by risk segment
+WITH risk_data AS (
+    SELECT
+        *,
+        CASE
+            WHEN tool_wear_min >= 200 AND torque_nm >= 50 THEN 'High risk'
+            WHEN tool_wear_min >= 150 OR torque_nm >= 45 THEN 'Medium risk'
+            ELSE 'Low risk'
+        END AS risk_segment
+    FROM machine_readings
+)
+
+SELECT
+    risk_segment,
+    COUNT(*) AS total_records,
+    SUM(machine_failure) AS total_failures,
+    ROUND(100.0 * SUM(machine_failure) / COUNT(*), 2) AS failure_rate_pct
+FROM risk_data
+GROUP BY risk_segment
+ORDER BY failure_rate_pct DESC;
+
+RESULT:
+COLUMNS: ['risk_segment', 'total_records', 'total_failures', 'failure_rate_pct']
+('High risk', 121, 66, 54.55)
+('Medium risk', 5128, 240, 4.68)
+('Low risk', 4751, 33, 0.69)
+
+--------------------------------------------------------------------------------
+QUERY 3
+--------------------------------------------------------------------------------
+-- 3. Top 20 highest-risk records
+SELECT
+    udi,
+    product_id,
+    type,
+    air_temperature_k,
+    process_temperature_k,
+    rotational_speed_rpm,
+    torque_nm,
+    tool_wear_min,
+    machine_failure,
+    ROUND(
+        (tool_wear_min * 0.4) +
+        (torque_nm * 2.0) -
+        (rotational_speed_rpm * 0.02),
+        2
+    ) AS simple_risk_score
+FROM machine_readings
+ORDER BY simple_risk_score DESC
+LIMIT 20;
+
+RESULT:
+COLUMNS: ['udi', 'product_id', 'type', 'air_temperature_k', 'process_temperature_k', 'rotational_speed_rpm', 'torque_nm', 'tool_wear_min', 'machine_failure', 'simple_risk_score']
+(5395, 'M20254', 'M', 302.8, 312.3, 1262, 70.5, 234, 1, 209.36)
+(1325, 'M16184', 'M', 298.8, 310.1, 1243, 74.5, 194, 1, 201.74)
+(4384, 'L51563', 'L', 301.7, 309.5, 1298, 65.5, 229, 1, 196.64)
+(9085, 'L56264', 'L', 297.2, 307.9, 1326, 75.4, 172, 1, 193.08)
+(7594, 'L54773', 'L', 300.5, 311.2, 1270, 67.5, 208, 1, 192.8)
+(8193, 'L55372', 'L', 299.6, 310.9, 1229, 65.2, 209, 1, 189.42)
+(8438, 'L55617', 'L', 298.7, 309.8, 1181, 65.9, 203, 1, 189.38)
+(4463, 'L51642', 'L', 302.7, 310.5, 1263, 67.8, 197, 1, 189.14)
+(1497, 'L48676', 'L', 298.0, 308.7, 1268, 69.4, 189, 1, 189.04)
+(2762, 'L49941', 'L', 299.8, 309.3, 1299, 65.1, 212, 1, 189.02)
+(3944, 'L51123', 'L', 302.3, 311.4, 1333, 66.7, 205, 1, 188.74)
+(3936, 'M18795', 'M', 302.6, 311.6, 1227, 68.2, 187, 1, 186.66)
+(5910, 'H35323', 'H', 300.7, 310.2, 1364, 65.3, 208, 1, 186.52)
+(3855, 'L51034', 'L', 302.4, 311.0, 1338, 67.6, 194, 1, 186.04)
+(9660, 'L56839', 'L', 298.9, 309.8, 1287, 61.9, 216, 1, 184.46)
+(3001, 'H32414', 'H', 300.5, 309.8, 1324, 72.8, 159, 1, 182.72)
+(161, 'L47340', 'L', 298.4, 308.2, 1282, 60.7, 216, 1, 182.16)
+(4730, 'L51909', 'L', 303.4, 311.8, 1306, 61.0, 215, 1, 181.88)
+(5402, 'M20261', 'M', 302.6, 312.3, 1454, 54.8, 253, 1, 181.72)
+(6498, 'L53677', 'L', 300.8, 309.9, 1312, 65.3, 192, 1, 181.16)
+
+--------------------------------------------------------------------------------
+QUERY 4
+--------------------------------------------------------------------------------
+-- 4. Risk score average by product type
+SELECT
+    type,
+    COUNT(*) AS total_records,
+    ROUND(AVG(
+        (tool_wear_min * 0.4) +
+        (torque_nm * 2.0) -
+        (rotational_speed_rpm * 0.02)
+    ), 2) AS avg_simple_risk_score,
+    SUM(machine_failure) AS total_failures
+FROM machine_readings
+GROUP BY type
+ORDER BY avg_simple_risk_score DESC;
+
+RESULT:
+COLUMNS: ['type', 'total_records', 'avg_simple_risk_score', 'total_failures']
+('L', 6000, 92.56, 235)
+('M', 2997, 92.19, 83)
+('H', 1003, 91.88, 21)
+
+--------------------------------------------------------------------------------
+QUERY 5
+--------------------------------------------------------------------------------
+-- 5. Operating condition buckets
+SELECT
+    CASE
+        WHEN rotational_speed_rpm < 1300 THEN 'Low RPM'
+        WHEN rotational_speed_rpm < 1700 THEN 'Normal RPM'
+        ELSE 'High RPM'
+    END AS rpm_bucket,
+    CASE
+        WHEN torque_nm < 35 THEN 'Low torque'
+        WHEN torque_nm < 55 THEN 'Normal torque'
+        ELSE 'High torque'
+    END AS torque_bucket,
+    COUNT(*) AS total_records,
+    SUM(machine_failure) AS total_failures,
+    ROUND(100.0 * SUM(machine_failure) / COUNT(*), 2) AS failure_rate_pct
+FROM machine_readings
+GROUP BY rpm_bucket, torque_bucket
+ORDER BY failure_rate_pct DESC;
+
+RESULT:
+COLUMNS: ['rpm_bucket', 'torque_bucket', 'total_records', 'total_failures', 'failure_rate_pct']
+('Low RPM', 'High torque', 155, 47, 30.32)
+('Normal RPM', 'High torque', 463, 102, 22.03)
+('Low RPM', 'Normal torque', 56, 2, 3.57)
+('High RPM', 'Low torque', 1347, 40, 2.97)
+('Normal RPM', 'Normal torque', 6284, 139, 2.21)
+('Normal RPM', 'Low torque', 1695, 9, 0.53)
